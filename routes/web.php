@@ -2,6 +2,7 @@
 
 use App\Livewire\CashierTerminal;
 use App\Livewire\Admin\InventoryDashboard;
+use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -9,31 +10,40 @@ Route::get('/', function () {
 });
 
 // Auth
-Route::get('/login', function () {
-    return view('auth.login');
-})->name('login');
+Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
+Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-Route::post('/login', function () {
-    return redirect()->route('cashier.dashboard');
-})->name('login.submit');
+Route::middleware(['auth'])->group(function () {
 
-// Cashier (Livewire - reactive)
-Route::get('/cashier', CashierTerminal::class)->name('cashier');
+    // Cashier routes
+    Route::middleware(['role:cashier,manager,admin'])->group(function () {
+        Route::get('/cashier/dashboard', function () {
+            return view('cashier.dashboard');
+        })->name('cashier.dashboard');
+        
+        Route::get('/cashier', CashierTerminal::class)->name('cashier');
+    });
 
-// Cashier Dashboard (static UI)
-Route::get('/cashier/dashboard', function () {
-    return view('cashier.dashboard');
-})->name('cashier.dashboard');
+    // Manager routes
+    Route::middleware(['role:manager,admin'])->group(function () {
+        Route::get('/manager/dashboard', function () {
+            return view('manager.dashboard');
+        })->name('manager.dashboard');
+        Route::get('/manager/staff', \App\Livewire\Admin\StaffManagement::class)->name('manager.staff');
+        Route::get('/admin/inventory', InventoryDashboard::class)->name('admin.inventory');
+    });
 
-// Manager Dashboard
-Route::get('/manager/dashboard', function () {
-    return view('manager.dashboard');
-})->name('manager.dashboard');
+    // Admin routes
+    Route::middleware(['role:admin'])->group(function () {
+        Route::get('/admin/dashboard', function () {
+            return view('admin.dashboard');
+        })->name('admin.dashboard');
+        
+        Route::get('/admin/staff', \App\Livewire\Admin\StaffManagement::class)->name('admin.staff');
+        Route::get('/admin/branches', \App\Livewire\Admin\BranchManagement::class)->name('admin.branches');
+        Route::get('/admin/settings', \App\Livewire\Admin\SettingsManagement::class)->name('admin.settings');
+        Route::get('/admin/reports', \App\Livewire\Admin\ProfitLoss::class)->name('admin.reports');
+    });
 
-// Admin Dashboard
-Route::get('/admin/dashboard', function () {
-    return view('admin.dashboard');
-})->name('admin.dashboard');
-
-// Admin Inventory (Livewire - reactive CRUD)
-Route::get('/admin/inventory', InventoryDashboard::class)->name('admin.inventory');
+});

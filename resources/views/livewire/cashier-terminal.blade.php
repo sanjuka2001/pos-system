@@ -28,7 +28,7 @@
                     wire:keydown.enter.prevent="scanBarcode"
                     type="text"
                     id="barcode-input"
-                    placeholder="Scan barcode or search product..."
+                    placeholder="Scan barcode or type product name + Enter"
                     autofocus
                     x-init="$el.focus()"
                     x-on:barcode-scanned.window="$nextTick(() => { $el.value = ''; $el.focus() })"
@@ -255,7 +255,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/>
                         </svg>
                         <p class="text-sm font-semibold text-gray-500 dark:text-slate-500">Cart is empty</p>
-                        <p class="text-xs text-gray-400 dark:text-slate-600 mt-1">Scan a barcode or click a product</p>
+                        <p class="text-xs text-gray-400 dark:text-slate-600 mt-1">Scan an Item Code or click a product</p>
                     </div>
                 @endforelse
             </div>

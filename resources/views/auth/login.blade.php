@@ -27,7 +27,7 @@
 
         {{-- Card --}}
         <div class="bg-white dark:bg-slate-900/80 border border-gray-200/60 dark:border-slate-800/60 rounded-2xl shadow-xl shadow-gray-200/40 dark:shadow-black/20 p-8 backdrop-blur-xl">
-            <form action="#" method="POST" class="space-y-5">
+            <form action="{{ route('login.submit') }}" method="POST" class="space-y-5">
                 @csrf
 
                 {{-- Username --}}
