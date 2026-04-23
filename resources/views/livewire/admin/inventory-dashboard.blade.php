@@ -113,7 +113,7 @@
                         <input
                             wire:model.live.debounce.300ms="search"
                             type="text"
-                            placeholder="Search products or barcodes..."
+                            placeholder="Search products or Item Codes..."
                             class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800/50 border border-gray-200/60 dark:border-slate-700/40 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/30 transition-all duration-200"
                             id="inventory-search"
                         >
@@ -173,7 +173,7 @@
                             </th>
                             <th class="text-left px-5 py-3.5">
                                 <button wire:click="sortBy('barcode')" class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white transition-colors">
-                                    Barcode
+                                    Item Code
                                     @if($sortField === 'barcode')
                                         <svg class="w-3 h-3 {{ $sortDirection === 'asc' ? '' : 'rotate-180' }}" fill="currentColor" viewBox="0 0 20 20"><path d="M5.293 7.707a1 1 0 011.414 0L10 11l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
                                     @endif
@@ -221,7 +221,7 @@
                                     </div>
                                 </td>
 
-                                {{-- Barcode --}}
+                                {{-- Item Code --}}
                                 <td class="px-5 py-4">
                                     <span class="text-xs font-mono text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-800/40 px-2 py-1 rounded-md">{{ $product->barcode }}</span>
                                 </td>
@@ -332,9 +332,9 @@
                         @error('name') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                     </div>
 
-                    {{-- Barcode --}}
+                    {{-- Item Code --}}
                     <div>
-                        <label class="text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">Barcode</label>
+                        <label class="text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">Item Code</label>
                         <input
                             wire:model="barcode"
                             type="text"

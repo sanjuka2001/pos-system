@@ -124,7 +124,7 @@
                         <thead>
                             <tr class="border-b border-gray-200/60 dark:border-slate-800/60 bg-gray-50/50 dark:bg-slate-800/20">
                                 <th class="text-left px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 w-10">#</th>
-                                <th class="text-left px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Barcode</th>
+                                <th class="text-left px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Item Code</th>
                                 <th class="text-left px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Item Name</th>
                                 <th class="text-center px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Weight</th>
                                 <th class="text-right px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Unit Price</th>
@@ -140,7 +140,7 @@
                                         <div class="flex flex-col items-center text-gray-400 dark:text-slate-600">
                                             <svg class="w-16 h-16 mb-3 text-gray-200 dark:text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                             <p class="text-sm font-semibold text-gray-500 dark:text-slate-500">No items in this sale</p>
-                                            <p class="text-xs text-gray-400 dark:text-slate-600 mt-1">Scan a barcode or search to add items</p>
+                                            <p class="text-xs text-gray-400 dark:text-slate-600 mt-1">Scan an Item Code or search to add items</p>
                                             <div class="flex items-center gap-4 mt-4 text-[10px] text-gray-400 dark:text-slate-600">
                                                 <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-slate-800 rounded font-mono text-[9px] border border-gray-200/40 dark:border-slate-700/30">F2</kbd> Focus search</span>
                                                 <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-slate-800 rounded font-mono text-[9px] border border-gray-200/40 dark:border-slate-700/30">F4</kbd> Hold</span>
