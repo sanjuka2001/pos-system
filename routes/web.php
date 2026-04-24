@@ -23,6 +23,10 @@ Route::middleware(['auth'])->group(function () {
         })->name('cashier.dashboard');
         
         Route::get('/cashier', CashierTerminal::class)->name('cashier');
+
+        // JSON API endpoints for POS terminal
+        Route::get('/api/products', [\App\Http\Controllers\Api\PosApiController::class, 'products'])->name('api.products');
+        Route::post('/api/orders', [\App\Http\Controllers\Api\PosApiController::class, 'placeOrder'])->name('api.orders');
     });
 
     // Manager routes
@@ -32,6 +36,7 @@ Route::middleware(['auth'])->group(function () {
         })->name('manager.dashboard');
         Route::get('/manager/staff', \App\Livewire\Admin\StaffManagement::class)->name('manager.staff');
         Route::get('/admin/inventory', InventoryDashboard::class)->name('admin.inventory');
+        Route::get('/inventory/history', \App\Livewire\Admin\StockMovementHistory::class)->name('inventory.history');
     });
 
     // Admin routes

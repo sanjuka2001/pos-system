@@ -143,17 +143,25 @@
                     </select>
                 </div>
 
-                {{-- Add Product Button --}}
-                <button
-                    wire:click="openCreateModal"
-                    class="px-5 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 rounded-xl text-sm font-bold text-white shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:from-violet-400 hover:to-purple-500 transition-all duration-200 active:scale-[0.97] flex items-center gap-2 flex-shrink-0"
-                    id="add-product-btn"
-                >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
-                    </svg>
-                    Add Product
-                </button>
+                {{-- Action Buttons --}}
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <a href="{{ route('inventory.history') }}" class="px-4 py-2.5 bg-gray-100 dark:bg-slate-800 border border-gray-200/60 dark:border-slate-700/40 rounded-xl text-sm font-semibold text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-all flex items-center gap-2" id="history-btn">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        History
+                    </a>
+                    <button wire:click="exportPdf" class="px-4 py-2.5 bg-red-50 dark:bg-red-500/10 border border-red-200/60 dark:border-red-700/40 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-all flex items-center gap-2" id="export-pdf-btn">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        PDF
+                    </button>
+                    <button wire:click="exportExcel" class="px-4 py-2.5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-700/40 rounded-xl text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-all flex items-center gap-2" id="export-excel-btn">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        CSV
+                    </button>
+                    <button wire:click="openCreateModal" class="px-5 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 rounded-xl text-sm font-bold text-white shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:from-violet-400 hover:to-purple-500 transition-all duration-200 active:scale-[0.97] flex items-center gap-2" id="add-product-btn">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                        Add Product
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -239,10 +247,14 @@
                                 </td>
 
                                 {{-- Stock --}}
+                                @php
+                                    $currentStock = $product->inventory->quantity_in_stock ?? $product->stock;
+                                    $alertLevel = $product->inventory->low_stock_alert ?? 10;
+                                @endphp
                                 <td class="px-5 py-4 text-center">
                                     <span class="inline-flex items-center text-xs font-bold font-mono px-2.5 py-1 rounded-full
-                                        {{ $product->stock === 0 ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400' : ($product->stock <= 10 ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400') }}">
-                                        {{ $product->stock }}
+                                        {{ $currentStock === 0 ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400' : ($currentStock <= $alertLevel ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400') }}">
+                                        {{ $currentStock }}
                                     </span>
                                 </td>
 
@@ -250,14 +262,20 @@
                                 <td class="px-5 py-4 text-right">
                                     <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                                         <button
+                                            wire:click="openRestockModal({{ $product->id }})"
+                                            class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all duration-150"
+                                            title="Restock"
+                                            id="restock-{{ $product->id }}"
+                                        >
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                        </button>
+                                        <button
                                             wire:click="openEditModal({{ $product->id }})"
                                             class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-slate-500 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-all duration-150"
                                             title="Edit"
                                             id="edit-{{ $product->id }}"
                                         >
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                            </svg>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                         </button>
                                         <button
                                             wire:click="confirmDelete({{ $product->id }})"
@@ -265,9 +283,7 @@
                                             title="Delete"
                                             id="delete-{{ $product->id }}"
                                         >
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                            </svg>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                         </button>
                                     </div>
                                 </td>
@@ -453,4 +469,39 @@
             </div>
         </div>
     @endif
+
+    {{-- RESTOCK MODAL --}}
+    @if($showRestockModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" wire:click="closeRestockModal"></div>
+            <div class="relative bg-white dark:bg-slate-900 border border-gray-200/60 dark:border-slate-800/60 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200/60 dark:border-slate-800/60 flex items-center justify-between">
+                    <h3 class="text-lg font-bold text-gray-900 dark:text-white">Restock Product</h3>
+                    <button wire:click="closeRestockModal" class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 transition-all">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <form wire:submit="restockProduct" class="px-6 py-5 space-y-4">
+                    <p class="text-sm text-gray-600 dark:text-slate-400">Adding stock to <strong class="text-gray-900 dark:text-white">{{ $restockProductName }}</strong></p>
+                    <div>
+                        <label class="text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">Quantity to Add</label>
+                        <input wire:model="restockQuantity" type="number" min="1" placeholder="Enter quantity" class="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-800/50 border border-gray-200/60 dark:border-slate-700/40 rounded-xl text-sm font-mono text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" id="restock-qty">
+                        @error('restockQuantity') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">Note (Optional)</label>
+                        <input wire:model="restockNote" type="text" placeholder="e.g. Supplier delivery" class="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-800/50 border border-gray-200/60 dark:border-slate-700/40 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" id="restock-note">
+                    </div>
+                    <div class="flex gap-3 pt-2">
+                        <button type="button" wire:click="closeRestockModal" class="flex-1 py-2.5 px-4 bg-gray-100 dark:bg-slate-800 border border-gray-200/60 dark:border-slate-700/40 rounded-xl text-sm font-semibold text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-all active:scale-[0.97]">Cancel</button>
+                        <button type="submit" class="flex-[2] py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-green-600 rounded-xl text-sm font-bold text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all active:scale-[0.97] flex items-center justify-center gap-2" id="confirm-restock-btn">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            Restock
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
+
 </div>

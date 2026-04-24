@@ -142,9 +142,10 @@
                                 <span class="text-base font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                                     {{ number_format($product->price, 2) }}
                                 </span>
+                                @php $pStock = $product->inventory->quantity_in_stock ?? $product->stock; @endphp
                                 <span class="text-xs px-2 py-0.5 rounded-full font-medium
-                                    {{ $product->stock > 20 ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : ($product->stock > 5 ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400') }}">
-                                    {{ $product->stock }} left
+                                    {{ $pStock > 20 ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : ($pStock > 5 ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400') }}">
+                                    {{ $pStock }} left
                                 </span>
                             </div>
 
@@ -321,6 +322,7 @@
                                 Cancel
                             </button>
                             <button
+                                wire:click="placeOrder"
                                 class="flex-[2] py-3 px-4 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl text-sm font-bold text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:from-emerald-400 hover:to-emerald-500 transition-all duration-200 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
                                 {{ (float)($amountReceived ?: 0) < $this->grandTotal ? 'disabled' : '' }}
                                 id="pay-btn"

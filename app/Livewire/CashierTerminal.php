@@ -3,7 +3,11 @@
 namespace App\Livewire;
 
 use App\Models\Category;
+use App\Models\Inventory;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Product;
+use App\Services\InventoryService;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 
@@ -26,7 +30,7 @@ class CashierTerminal extends Component
             return;
         }
 
-        $product = Product::where('barcode', trim($this->search))->first();
+        $product = Product::with('inventory')->where('barcode', trim($this->search))->first();
 
         if ($product) {
             $this->addToCart($product->id);
@@ -34,8 +38,15 @@ class CashierTerminal extends Component
             $this->dispatch('barcode-scanned');
         } else {
             // No exact match — try a name search and add first result
-            $product = Product::where('name', 'like', '%' . trim($this->search) . '%')
-                ->where('stock', '>', 0)
+            $product = Product::with('inventory')
+                ->where('name', 'like', '%' . trim($this->search) . '%')
+                ->where(function ($q) {
+                    $q->whereHas('inventory', function ($sub) {
+                        $sub->where('quantity_in_stock', '>', 0);
+                    })->orWhere(function ($sub) {
+                        $sub->whereDoesntHave('inventory')->where('stock', '>', 0);
+                    });
+                })
                 ->first();
 
             if ($product) {
@@ -51,16 +62,23 @@ class CashierTerminal extends Component
      */
     public function addToCart(int $productId): void
     {
-        $product = Product::find($productId);
+        $product = Product::with('inventory')->find($productId);
 
-        if (!$product || $product->stock <= 0) {
+        if (!$product) {
+            return;
+        }
+
+        $availableStock = $product->inventory->quantity_in_stock ?? $product->stock;
+
+        if ($availableStock <= 0) {
+            $this->dispatch('notification', type: 'error', message: "Insufficient stock for {$product->name}");
             return;
         }
 
         $key = (string) $productId;
 
         if (isset($this->cart[$key])) {
-            if ($this->cart[$key]['qty'] < $product->stock) {
+            if ($this->cart[$key]['qty'] < $availableStock) {
                 $this->cart[$key]['qty']++;
                 $this->cart[$key]['line_total'] = $this->cart[$key]['qty'] * $product->price;
             }
@@ -71,7 +89,7 @@ class CashierTerminal extends Component
                 'price'      => (float) $product->price,
                 'qty'        => 1,
                 'line_total' => (float) $product->price,
-                'stock'      => $product->stock,
+                'stock'      => $availableStock,
             ];
         }
     }
@@ -133,6 +151,76 @@ class CashierTerminal extends Component
     }
 
     /**
+     * Place order: create order, deduct stock (all-or-nothing), clear cart.
+     */
+    public function placeOrder(): void
+    {
+        // Validate cart is not empty
+        if (empty($this->cart)) {
+            $this->dispatch('notification', type: 'error', message: 'Cart is empty. Add items before placing an order.');
+            return;
+        }
+
+        // Validate amount received
+        $received = (float) ($this->amountReceived ?: 0);
+        if ($received < $this->grandTotal) {
+            $this->dispatch('notification', type: 'error', message: 'Amount received is less than the total. Please enter the correct amount.');
+            return;
+        }
+
+        try {
+            // Create order
+            $order = Order::create([
+                'user_id' => auth()->id(),
+                'subtotal' => $this->subtotal,
+                'tax' => $this->tax,
+                'total' => $this->grandTotal,
+                'amount_received' => $received,
+                'change_amount' => $received - $this->grandTotal,
+                'payment_method' => 'cash',
+                'status' => 'completed',
+            ]);
+
+            // Create order items
+            $stockItems = [];
+            foreach ($this->cart as $item) {
+                OrderItem::create([
+                    'order_id' => $order->id,
+                    'product_id' => $item['id'],
+                    'quantity' => $item['qty'],
+                    'price' => $item['price'],
+                    'subtotal' => $item['line_total'],
+                ]);
+
+                $stockItems[] = [
+                    'product_id' => $item['id'],
+                    'quantity' => $item['qty'],
+                ];
+            }
+
+            // Deduct stock (all-or-nothing inside DB transaction)
+            $inventoryService = app(InventoryService::class);
+            $inventoryService->deductStockForSale($stockItems, $order->id, auth()->id());
+
+            // Success — clear cart
+            $this->cart = [];
+            $this->amountReceived = '';
+
+            $this->dispatch('notification', type: 'success', message: "Order #{$order->id} placed successfully! Change: LKR " . number_format($order->change_amount, 2));
+            $this->dispatch('order-placed');
+
+        } catch (\Exception $e) {
+            // If stock deduction fails, delete the order
+            if (isset($order)) {
+                $order->items()->delete();
+                $order->delete();
+            }
+
+            $this->dispatch('notification', type: 'error', message: $e->getMessage());
+        }
+    }
+
+    /**
      * Cart subtotal (sum of all line totals).
      */
     #[Computed]
@@ -175,7 +263,18 @@ class CashierTerminal extends Component
     #[Computed]
     public function products()
     {
-        $query = Product::with('category')->where('stock', '>', 0);
+        $query = Product::with(['category', 'inventory'])
+            ->where(function ($q) {
+                // Products with inventory records that have stock
+                $q->whereHas('inventory', function ($sub) {
+                    $sub->where('quantity_in_stock', '>', 0);
+                })
+                // OR products without inventory records but with stock > 0
+                ->orWhere(function ($sub) {
+                    $sub->whereDoesntHave('inventory')
+                        ->where('stock', '>', 0);
+                });
+            });
 
         if ($this->categoryFilter) {
             $query->where('category_id', $this->categoryFilter);

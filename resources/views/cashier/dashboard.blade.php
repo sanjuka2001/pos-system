@@ -378,22 +378,8 @@ function cashierApp() {
         orderNote: '',
         heldOrders: [],
         toast: { show: false, message: '', type: 'success' },
-
-        // Dummy product database (simulates barcode lookup)
-        productDB: [
-            { id: 1, barcode: '5449000000996', name: 'Coca-Cola 500ml', price: 350, weight: '500ml', category: 'Beverages' },
-            { id: 2, barcode: '5449000001498', name: 'Sprite 500ml', price: 350, weight: '500ml', category: 'Beverages' },
-            { id: 3, barcode: '8901234567890', name: 'Elephant House Ginger Beer', price: 180, weight: '330ml', category: 'Beverages' },
-            { id: 4, barcode: '4800016123456', name: 'Munchee Lemon Puff', price: 220, weight: '200g', category: 'Snacks' },
-            { id: 5, barcode: '4800016234567', name: 'Maliban Gold Marie', price: 190, weight: '300g', category: 'Snacks' },
-            { id: 6, barcode: '4800016345678', name: 'CBL Tikiri Mari', price: 150, weight: '250g', category: 'Snacks' },
-            { id: 7, barcode: '9415007001234', name: 'Anchor Fresh Milk 1L', price: 620, weight: '1L', category: 'Dairy' },
-            { id: 8, barcode: '9415007002345', name: 'Highland Curd 400g', price: 280, weight: '400g', category: 'Dairy' },
-            { id: 9, barcode: '9415007003456', name: 'Newdale Yoghurt Strawberry', price: 150, weight: '80g', category: 'Dairy' },
-            { id: 10, barcode: '7501234567001', name: 'Sliced Bread White', price: 420, weight: '450g', category: 'Bakery' },
-            { id: 11, barcode: '7501234567002', name: 'Fish Bun', price: 120, weight: '100g', category: 'Bakery' },
-            { id: 12, barcode: '7501234567003', name: 'Chocolate Croissant', price: 280, weight: '85g', category: 'Bakery' },
-        ],
+        productDB: [],
+        isProcessing: false,
 
         get quickAmounts() {
             const gt = this.grandTotal;
@@ -410,6 +396,17 @@ function cashierApp() {
         get vat() { return this.afterDiscount * 0.10; },
         get grandTotal() { return this.afterDiscount + this.vat; },
         get changeDue() { return (this.amountReceived || 0) - this.grandTotal; },
+
+        async loadProducts() {
+            try {
+                const res = await fetch('/api/products');
+                if (res.ok) {
+                    this.productDB = await res.json();
+                }
+            } catch (e) {
+                console.error('Failed to load products:', e);
+            }
+        },
 
         handleBarcodeScan() {
             const q = this.searchQuery.trim();
@@ -441,7 +438,6 @@ function cashierApp() {
             }
             this.justAdded = true;
             setTimeout(() => { this.justAdded = false; }, 1500);
-            // Scroll to bottom
             this.$nextTick(() => {
                 const area = document.getElementById('sale-items-area');
                 if (area) area.scrollTop = area.scrollHeight;
@@ -495,7 +491,7 @@ function cashierApp() {
         recallOrder() {
             if (this.heldOrders.length === 0) return;
             if (this.saleItems.length > 0) {
-                this.holdOrder(); // auto-hold current
+                this.holdOrder();
             }
             const recalled = this.heldOrders.pop();
             this.saleItems = recalled.items;
@@ -507,16 +503,52 @@ function cashierApp() {
             this.$refs.barcodeInput.focus();
         },
 
-        placeOrder() {
-            if (this.saleItems.length === 0) return;
-            const total = this.grandTotal;
-            this.showToast('Sale completed! Total: LKR ' + total.toFixed(2), 'success');
-            this.saleItems = [];
-            this.discountValue = 0;
-            this.amountReceived = 0;
-            this.orderNote = '';
-            this.receiptNo = 'INV-' + String(Math.floor(1000 + Math.random() * 9000));
-            this.$refs.barcodeInput.focus();
+        async placeOrder() {
+            if (this.saleItems.length === 0 || this.isProcessing) return;
+            this.isProcessing = true;
+
+            try {
+                const res = await fetch('/api/orders', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    },
+                    body: JSON.stringify({
+                        items: this.saleItems.map(i => ({ product_id: i.id, qty: i.qty, price: i.price })),
+                        subtotal: this.subtotal,
+                        discount: this.discountAmount,
+                        tax: this.vat,
+                        total: this.grandTotal,
+                        amount_received: this.amountReceived,
+                        change_amount: Math.max(0, this.changeDue),
+                        payment_method: this.paymentMethod,
+                        note: this.orderNote,
+                    }),
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    const change = data.change_amount || 0;
+                    this.showToast('Sale completed! Change: LKR ' + change.toFixed(2), 'success');
+                    this.saleItems = [];
+                    this.discountValue = 0;
+                    this.amountReceived = 0;
+                    this.orderNote = '';
+                    this.receiptNo = 'INV-' + String(Math.floor(1000 + Math.random() * 9000));
+                    // Reload products to get updated stock
+                    this.loadProducts();
+                } else {
+                    this.showToast(data.message || 'Order failed', 'error');
+                }
+            } catch (e) {
+                this.showToast('Network error. Please try again.', 'error');
+                console.error('Order error:', e);
+            } finally {
+                this.isProcessing = false;
+                this.$refs.barcodeInput.focus();
+            }
         },
 
         showToast(message, type = 'success') {
@@ -525,6 +557,9 @@ function cashierApp() {
         },
 
         init() {
+            // Load products from database
+            this.loadProducts();
+
             // Clock
             const tick = () => {
                 const now = new Date();
@@ -546,3 +581,4 @@ function cashierApp() {
 }
 </script>
 @endpush
+

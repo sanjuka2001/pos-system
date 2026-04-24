@@ -3,6 +3,12 @@
 @section('title', 'Admin Dashboard')
 
 @section('content')
+@php
+    $totalUsers = \App\Models\User::count();
+    $totalProducts = \App\Models\Product::count();
+    $lowStockCount = \App\Models\Inventory::whereColumn('quantity_in_stock', '<=', 'low_stock_alert')->where('quantity_in_stock', '>', 0)->count();
+    $outOfStockCount = \App\Models\Inventory::where('quantity_in_stock', '<=', 0)->count();
+@endphp
 {{-- ═══════════════════════ SUMMARY CARDS ═══════════════════════ --}}
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
     {{-- Total Users --}}
@@ -13,20 +19,23 @@
             </div>
             <span class="text-[10px] font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 px-2 py-0.5 rounded-full">Active</span>
         </div>
-        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono">8</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono">{{ $totalUsers }}</p>
         <p class="text-xs text-gray-500 dark:text-slate-400 mt-1">Total Users</p>
     </div>
 
-    {{-- Total Sales --}}
-    <div class="bg-white dark:bg-slate-900/60 border border-gray-200/60 dark:border-slate-800/60 rounded-2xl p-5 transition-colors">
-        <div class="flex items-center justify-between mb-3">
-            <div class="w-10 h-10 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl flex items-center justify-center">
-                <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    {{-- Low Stock Alert --}}
+    <div class="bg-white dark:bg-slate-900/60 border border-gray-200/60 dark:border-slate-800/60 rounded-2xl p-5 transition-colors relative overflow-hidden group">
+        <div class="absolute inset-0 bg-amber-500/5 dark:bg-amber-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <div class="flex items-center justify-between mb-3 relative">
+            <div class="w-10 h-10 bg-amber-50 dark:bg-amber-500/10 rounded-xl flex items-center justify-center">
+                <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
             </div>
-            <span class="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full">This Month</span>
+            @if($lowStockCount > 0)
+                <span class="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 rounded-full animate-pulse">Alert</span>
+            @endif
         </div>
-        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono">LKR 1.2M</p>
-        <p class="text-xs text-gray-500 dark:text-slate-400 mt-1">Total Sales</p>
+        <p class="text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono relative">{{ $lowStockCount }}</p>
+        <p class="text-xs text-gray-500 dark:text-slate-400 mt-1 relative">Low Stock Items</p>
     </div>
 
     {{-- Total Products --}}
@@ -37,20 +46,22 @@
             </div>
             <span class="text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded-full">In Stock</span>
         </div>
-        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono">156</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono">{{ $totalProducts }}</p>
         <p class="text-xs text-gray-500 dark:text-slate-400 mt-1">Total Products</p>
     </div>
 
-    {{-- Total Orders --}}
+    {{-- Out of Stock --}}
     <div class="bg-white dark:bg-slate-900/60 border border-gray-200/60 dark:border-slate-800/60 rounded-2xl p-5 transition-colors">
         <div class="flex items-center justify-between mb-3">
-            <div class="w-10 h-10 bg-amber-50 dark:bg-amber-500/10 rounded-xl flex items-center justify-center">
-                <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            <div class="w-10 h-10 bg-red-50 dark:bg-red-500/10 rounded-xl flex items-center justify-center">
+                <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
             </div>
-            <span class="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 rounded-full">All Time</span>
+            @if($outOfStockCount > 0)
+                <span class="text-[10px] font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2 py-0.5 rounded-full">Critical</span>
+            @endif
         </div>
-        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono">2,847</p>
-        <p class="text-xs text-gray-500 dark:text-slate-400 mt-1">Total Orders</p>
+        <p class="text-2xl font-bold text-red-600 dark:text-red-400 font-mono">{{ $outOfStockCount }}</p>
+        <p class="text-xs text-gray-500 dark:text-slate-400 mt-1">Out of Stock</p>
     </div>
 </div>
 

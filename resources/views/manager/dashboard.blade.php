@@ -3,6 +3,9 @@
 @section('title', 'Manager Dashboard')
 
 @section('content')
+@php
+    $lowStockCount = \App\Models\Inventory::whereColumn('quantity_in_stock', '<=', 'low_stock_alert')->where('quantity_in_stock', '>', 0)->count();
+@endphp
 {{-- ═══════════════════════ SUMMARY CARDS ═══════════════════════ --}}
 <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
     {{-- Today's Sales --}}
@@ -13,7 +16,7 @@
             </div>
             <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full">Today</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900 dark:text-white font-mono tracking-tight">LKR 45.2K</p>
+        <p class="text-3xl font-bold text-gray-900 dark:text-white font-mono tracking-tight">LKR {{ number_format(\App\Models\Order::whereDate('created_at', today())->sum('total'), 0) }}</p>
         <p class="text-sm text-gray-500 dark:text-slate-400 mt-1 font-medium">Daily Revenue</p>
     </div>
 
@@ -24,9 +27,11 @@
             <div class="w-11 h-11 bg-red-50 dark:bg-red-500/10 rounded-xl flex items-center justify-center">
                 <svg class="w-5.5 h-5.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
             </div>
-            <span class="text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2.5 py-1 rounded-full animate-pulse">Needs Attention</span>
+            @if($lowStockCount > 0)
+                <span class="text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2.5 py-1 rounded-full animate-pulse">Needs Attention</span>
+            @endif
         </div>
-        <p class="text-3xl font-bold text-gray-900 dark:text-white font-mono tracking-tight relative">12</p>
+        <p class="text-3xl font-bold text-gray-900 dark:text-white font-mono tracking-tight relative">{{ $lowStockCount }}</p>
         <p class="text-sm text-gray-500 dark:text-slate-400 mt-1 font-medium relative">Items Low on Stock</p>
     </div>
 

@@ -7,7 +7,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Category extends Model
 {
-    protected $fillable = ['name', 'icon'];
+    protected $fillable = ['name', 'icon', 'description', 'is_active'];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
 
     /**
      * Get the products for the category.

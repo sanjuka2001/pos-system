@@ -3,7 +3,10 @@
 namespace App\Livewire\Admin;
 
 use App\Models\Category;
+use App\Models\Inventory;
 use App\Models\Product;
+use App\Services\InventoryService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Rule;
 use Livewire\Component;
@@ -23,10 +26,17 @@ class InventoryDashboard extends Component
     // Modal state
     public bool $showModal = false;
     public bool $showDeleteModal = false;
+    public bool $showRestockModal = false;
     public bool $isEditing = false;
     public ?int $editingProductId = null;
     public ?int $deletingProductId = null;
     public string $deletingProductName = '';
+
+    // Restock form
+    public ?int $restockProductId = null;
+    public string $restockProductName = '';
+    public string $restockQuantity = '';
+    public string $restockNote = '';
 
     // Form fields
     #[Rule('required|string|max:255')]
@@ -35,14 +45,20 @@ class InventoryDashboard extends Component
     #[Rule('required|string|max:50')]
     public string $barcode = '';
 
+    public string $sku = '';
+
     #[Rule('required|numeric|min:0')]
     public string $price = '';
+
+    public string $cost_price = '';
 
     #[Rule('required|integer|min:0')]
     public string $stock = '';
 
     #[Rule('required|exists:categories,id')]
     public string $category_id = '';
+
+    public string $low_stock_alert = '10';
 
     /**
      * Reset pagination when search or filters change.
@@ -90,16 +106,19 @@ class InventoryDashboard extends Component
      */
     public function openEditModal(int $productId): void
     {
-        $product = Product::findOrFail($productId);
+        $product = Product::with('inventory')->findOrFail($productId);
 
         $this->resetForm();
         $this->isEditing = true;
         $this->editingProductId = $productId;
         $this->name = $product->name;
+        $this->sku = $product->sku ?? '';
         $this->barcode = $product->barcode;
         $this->price = (string) $product->price;
-        $this->stock = (string) $product->stock;
+        $this->cost_price = (string) ($product->cost_price ?? '');
+        $this->stock = (string) ($product->inventory->quantity_in_stock ?? $product->stock);
         $this->category_id = (string) $product->category_id;
+        $this->low_stock_alert = (string) ($product->inventory->low_stock_alert ?? 10);
         $this->showModal = true;
     }
 
@@ -124,16 +143,45 @@ class InventoryDashboard extends Component
 
         $data = [
             'name' => $this->name,
+            'sku' => $this->sku ?: null,
             'barcode' => $this->barcode,
             'price' => (float) $this->price,
+            'cost_price' => $this->cost_price !== '' ? (float) $this->cost_price : null,
             'stock' => (int) $this->stock,
             'category_id' => (int) $this->category_id,
         ];
 
+        $service = app(InventoryService::class);
+
         if ($this->isEditing && $this->editingProductId) {
-            Product::findOrFail($this->editingProductId)->update($data);
+            $product = Product::findOrFail($this->editingProductId);
+            $product->update($data);
+
+            // Update inventory record and log adjustment if stock changed
+            $inventory = Inventory::firstOrCreate(
+                ['product_id' => $product->id],
+                ['quantity_in_stock' => (int) $this->stock, 'low_stock_alert' => (int) $this->low_stock_alert]
+            );
+
+            if ($inventory->quantity_in_stock !== (int) $this->stock) {
+                $service->adjustStock(
+                    $product->id,
+                    (int) $this->stock,
+                    auth()->id(),
+                    'Stock adjusted via product edit'
+                );
+            }
+
+            $inventory->update(['low_stock_alert' => (int) $this->low_stock_alert]);
         } else {
-            Product::create($data);
+            $product = Product::create($data);
+
+            // Create inventory record
+            Inventory::create([
+                'product_id' => $product->id,
+                'quantity_in_stock' => (int) $this->stock,
+                'low_stock_alert' => (int) $this->low_stock_alert,
+            ]);
         }
 
         $this->closeModal();
@@ -165,13 +213,117 @@ class InventoryDashboard extends Component
     }
 
     /**
+     * Open restock modal for a product.
+     */
+    public function openRestockModal(int $productId): void
+    {
+        $product = Product::findOrFail($productId);
+        $this->restockProductId = $productId;
+        $this->restockProductName = $product->name;
+        $this->restockQuantity = '';
+        $this->restockNote = '';
+        $this->showRestockModal = true;
+    }
+
+    /**
+     * Close restock modal.
+     */
+    public function closeRestockModal(): void
+    {
+        $this->showRestockModal = false;
+        $this->restockProductId = null;
+        $this->restockProductName = '';
+        $this->restockQuantity = '';
+        $this->restockNote = '';
+    }
+
+    /**
+     * Restock a product.
+     */
+    public function restockProduct(): void
+    {
+        $this->validate([
+            'restockQuantity' => 'required|integer|min:1',
+        ]);
+
+        if ($this->restockProductId) {
+            $service = app(InventoryService::class);
+            $service->restockProduct(
+                $this->restockProductId,
+                (int) $this->restockQuantity,
+                auth()->id(),
+                $this->restockNote ?: null
+            );
+        }
+
+        $this->closeRestockModal();
+    }
+
+    /**
      * Quick stock update directly from the table.
      */
     public function updateStock(int $productId, int $newStock): void
     {
         if ($newStock >= 0) {
-            Product::findOrFail($productId)->update(['stock' => $newStock]);
+            $service = app(InventoryService::class);
+            $service->adjustStock(
+                $productId,
+                $newStock,
+                auth()->id(),
+                'Quick stock adjustment from inventory table'
+            );
         }
+    }
+
+    /**
+     * Export inventory to PDF.
+     */
+    public function exportPdf()
+    {
+        $products = Product::with(['category', 'inventory'])->orderBy('name')->get();
+
+        $pdf = Pdf::loadView('exports.inventory-pdf', [
+            'products' => $products,
+            'generatedAt' => now()->format('Y-m-d H:i:s'),
+        ]);
+
+        return response()->streamDownload(function () use ($pdf) {
+            echo $pdf->output();
+        }, 'inventory-report-' . now()->format('Y-m-d') . '.pdf');
+    }
+
+    /**
+     * Export inventory to Excel (CSV).
+     */
+    public function exportExcel()
+    {
+        $products = Product::with(['category', 'inventory'])->orderBy('name')->get();
+
+        $csvContent = "Product Name,SKU,Barcode,Category,Price,Cost Price,Stock,Low Stock Alert,Status\n";
+
+        foreach ($products as $product) {
+            $stock = $product->inventory->quantity_in_stock ?? $product->stock;
+            $alert = $product->inventory->low_stock_alert ?? 10;
+            $status = $stock <= 0 ? 'Out of Stock' : ($stock <= $alert ? 'Low Stock' : 'In Stock');
+
+            $csvContent .= implode(',', [
+                '"' . str_replace('"', '""', $product->name) . '"',
+                '"' . ($product->sku ?? '') . '"',
+                '"' . $product->barcode . '"',
+                '"' . ($product->category->name ?? '') . '"',
+                $product->price,
+                $product->cost_price ?? '',
+                $stock,
+                $alert,
+                $status,
+            ]) . "\n";
+        }
+
+        return response()->streamDownload(function () use ($csvContent) {
+            echo $csvContent;
+        }, 'inventory-report-' . now()->format('Y-m-d') . '.csv', [
+            'Content-Type' => 'text/csv',
+        ]);
     }
 
     /**
@@ -202,10 +354,13 @@ class InventoryDashboard extends Component
         $this->isEditing = false;
         $this->editingProductId = null;
         $this->name = '';
+        $this->sku = '';
         $this->barcode = '';
         $this->price = '';
+        $this->cost_price = '';
         $this->stock = '';
         $this->category_id = '';
+        $this->low_stock_alert = '10';
     }
 
     /**
@@ -223,10 +378,12 @@ class InventoryDashboard extends Component
     #[Computed]
     public function stats(): array
     {
+        $service = app(InventoryService::class);
+
         return [
             'total' => Product::count(),
-            'low_stock' => Product::where('stock', '>', 0)->where('stock', '<=', 10)->count(),
-            'out_of_stock' => Product::where('stock', 0)->count(),
+            'low_stock' => $service->getLowStockCount(),
+            'out_of_stock' => $service->getOutOfStockCount(),
             'categories' => Category::count(),
         ];
     }
@@ -237,13 +394,14 @@ class InventoryDashboard extends Component
     #[Computed]
     public function products()
     {
-        $query = Product::with('category');
+        $query = Product::with(['category', 'inventory']);
 
         // Search
         if (!empty($this->search)) {
             $query->where(function ($q) {
                 $q->where('name', 'like', '%' . $this->search . '%')
-                  ->orWhere('barcode', 'like', '%' . $this->search . '%');
+                  ->orWhere('barcode', 'like', '%' . $this->search . '%')
+                  ->orWhere('sku', 'like', '%' . $this->search . '%');
             });
         }
 
@@ -252,17 +410,26 @@ class InventoryDashboard extends Component
             $query->where('category_id', $this->categoryFilter);
         }
 
-        // Stock filter
+        // Stock filter — uses inventory table
         if ($this->stockFilter === 'low') {
-            $query->where('stock', '>', 0)->where('stock', '<=', 10);
+            $query->whereHas('inventory', function ($q) {
+                $q->whereColumn('quantity_in_stock', '<=', 'low_stock_alert')
+                  ->where('quantity_in_stock', '>', 0);
+            });
         } elseif ($this->stockFilter === 'out') {
-            $query->where('stock', 0);
+            $query->whereHas('inventory', function ($q) {
+                $q->where('quantity_in_stock', '<=', 0);
+            });
         }
 
         // Sort
         if ($this->sortField === 'category') {
             $query->join('categories', 'products.category_id', '=', 'categories.id')
                   ->orderBy('categories.name', $this->sortDirection)
+                  ->select('products.*');
+        } elseif ($this->sortField === 'stock') {
+            $query->leftJoin('inventory', 'products.id', '=', 'inventory.product_id')
+                  ->orderBy('inventory.quantity_in_stock', $this->sortDirection)
                   ->select('products.*');
         } else {
             $query->orderBy($this->sortField, $this->sortDirection);
