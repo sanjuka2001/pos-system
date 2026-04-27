@@ -38,6 +38,7 @@
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200 dark:bg-slate-900 dark:divide-slate-800 text-gray-900 dark:text-white">
@@ -46,6 +47,9 @@
                         <td class="px-6 py-4 whitespace-nowrap">{{ $branch->name }}</td>
                         <td class="px-6 py-4 whitespace-nowrap">{{ $branch->location }}</td>
                         <td class="px-6 py-4 whitespace-nowrap">{{ $branch->contact_number }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button wire:click="deleteBranch({{ $branch->id }})" onclick="confirm('Are you sure you want to remove this branch?') || event.stopImmediatePropagation()" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300">Remove</button>
+                        </td>
                     </tr>
                 @endforeach
             </tbody>

@@ -3,8 +3,60 @@
 @section('title', 'Admin Dashboard')
 
 @section('content')
-{{-- ═══════════════════════ SUMMARY CARDS ═══════════════════════ --}}
-<div class="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+@php
+    $totalUsers = \App\Models\User::count();
+    $totalProducts = \App\Models\Product::count();
+    $productsInStock = \App\Models\Product::where('stock', '>', 0)->count();
+    $totalOrders = \App\Models\Order::count();
+    $todayOrders = \App\Models\Order::whereDate('created_at', today())->count();
+
+    $monthSales = \App\Models\OrderItem::whereHas('order', function ($q) {
+        $q->whereMonth('created_at', now()->month)
+          ->whereYear('created_at', now()->year);
+    })->sum('subtotal');
+
+    if ($monthSales >= 1000000) {
+        $salesFormatted = 'LKR ' . number_format($monthSales / 1000000, 1) . 'M';
+    } elseif ($monthSales >= 1000) {
+        $salesFormatted = 'LKR ' . number_format($monthSales / 1000, 1) . 'K';
+    } else {
+        $salesFormatted = 'LKR ' . number_format($monthSales, 2);
+    }
+
+    $lowStockCount = \App\Models\Product::where('stock', '<', 10)->where('stock', '>', 0)->count();
+    $outOfStockCount = \App\Models\Product::where('stock', '<=', 0)->count();
+@endphp
+
+{{-- ═══════════════════════ SUMMARY CARDS (Real-time polling) ═══════════════════════ --}}
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8"
+     x-data="{
+        stats: {
+            totalUsers: {{ $totalUsers }},
+            totalProducts: {{ $totalProducts }},
+            productsInStock: {{ $productsInStock }},
+            totalOrders: {{ $totalOrders }},
+            todayOrders: {{ $todayOrders }},
+            monthSales: '{{ $salesFormatted }}',
+            lowStockCount: {{ $lowStockCount }},
+            outOfStockCount: {{ $outOfStockCount }},
+        },
+        async fetchStats() {
+            try {
+                const res = await fetch('/admin/stats', {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                if (res.ok) {
+                    this.stats = await res.json();
+                }
+            } catch (e) {
+                console.error('Stats fetch error:', e);
+            }
+        },
+        init() {
+            setInterval(() => this.fetchStats(), 10000);
+        }
+     }"
+>
     {{-- Total Users --}}
     <div class="bg-white dark:bg-slate-900/60 border border-gray-200/60 dark:border-slate-800/60 rounded-2xl p-5 transition-colors">
         <div class="flex items-center justify-between mb-3">
@@ -13,7 +65,7 @@
             </div>
             <span class="text-[10px] font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 px-2 py-0.5 rounded-full">Active</span>
         </div>
-        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono">8</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono" x-text="stats.totalUsers"></p>
         <p class="text-xs text-gray-500 dark:text-slate-400 mt-1">Total Users</p>
     </div>
 
@@ -25,7 +77,7 @@
             </div>
             <span class="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full">This Month</span>
         </div>
-        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono">LKR 1.2M</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono" x-text="stats.monthSales"></p>
         <p class="text-xs text-gray-500 dark:text-slate-400 mt-1">Total Sales</p>
     </div>
 
@@ -35,10 +87,14 @@
             <div class="w-10 h-10 bg-blue-50 dark:bg-blue-500/10 rounded-xl flex items-center justify-center">
                 <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
             </div>
-            <span class="text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded-full">In Stock</span>
+            <span class="text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded-full" x-text="stats.productsInStock + ' In Stock'"></span>
         </div>
-        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono">156</p>
-        <p class="text-xs text-gray-500 dark:text-slate-400 mt-1">Total Products</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono" x-text="stats.totalProducts"></p>
+        <p class="text-xs text-gray-500 dark:text-slate-400 mt-1">
+            Total Products
+            <template x-if="stats.lowStockCount > 0"><span class="text-amber-500" x-text="'· ' + stats.lowStockCount + ' low'"></span></template>
+            <template x-if="stats.outOfStockCount > 0"><span class="text-red-500" x-text="'· ' + stats.outOfStockCount + ' out'"></span></template>
+        </p>
     </div>
 
     {{-- Total Orders --}}
@@ -47,9 +103,9 @@
             <div class="w-10 h-10 bg-amber-50 dark:bg-amber-500/10 rounded-xl flex items-center justify-center">
                 <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
             </div>
-            <span class="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 rounded-full">All Time</span>
+            <span class="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 rounded-full" x-text="stats.todayOrders + ' Today'"></span>
         </div>
-        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono">2,847</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white font-mono" x-text="stats.totalOrders.toLocaleString()"></p>
         <p class="text-xs text-gray-500 dark:text-slate-400 mt-1">Total Orders</p>
     </div>
 </div>

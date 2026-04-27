@@ -39,6 +39,18 @@ class BranchManagement extends Component
         session()->flash('message', 'Branch created successfully.');
     }
 
+    public function deleteBranch($id)
+    {
+        $branch = Branch::find($id);
+        if ($branch) {
+            // Check if there are users attached to this branch, handle appropriately
+            // but for simple removal we just delete or set users to null if cascading is set
+            $branch->delete();
+            session()->flash('message', 'Branch removed successfully.');
+        }
+        $this->loadData();
+    }
+
     public function render()
     {
         return view('livewire.admin.branch-management')->layout('layouts.admin');
