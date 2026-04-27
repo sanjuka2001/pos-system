@@ -41,7 +41,7 @@
                 </div>
                 <div>
                     <h1 class="text-base font-bold text-gray-900 dark:text-white tracking-tight">Manager Panel</h1>
-                    <p class="text-[10px] text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wider">Dashboard</p>
+                    <p class="text-[10px] text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wider">{{ Auth::user()->name ?? 'Manager' }}</p>
                 </div>
             </div>
         </div>

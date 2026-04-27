@@ -6,7 +6,7 @@
 <div class="flex flex-col h-screen overflow-hidden" x-data="cashierApp()">
 
     {{-- ═══════════════════════ TOP BAR ═══════════════════════ --}}
-    <header class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-gray-200/60 dark:border-slate-800/60 px-6 py-3 flex-shrink-0 transition-colors duration-300">
+    <header class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-gray-200/60 dark:border-slate-800/60 px-6 py-3 flex-shrink-0 transition-colors duration-300" style="position: relative; z-index: 100; overflow: visible;">
         <div class="flex items-center justify-between gap-4">
             {{-- Logo --}}
             <div class="flex items-center gap-3 flex-shrink-0">
@@ -17,12 +17,15 @@
                 </div>
                 <div>
                     <h1 class="text-base font-bold text-gray-900 dark:text-white tracking-tight">POS Terminal</h1>
-                    <p class="text-[10px] text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wider">Cashier: <span class="text-emerald-600 dark:text-emerald-400">John Doe</span></p>
+                    <p class="text-[10px] text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wider">{{ ucfirst(Auth::user()->role) }}: <span class="text-emerald-600 dark:text-emerald-400">{{ Auth::user()->name }}</span></p>
                 </div>
             </div>
 
-            {{-- Search / Barcode Input --}}
-            <div class="flex-1 max-w-xl relative" @keydown.f2.window.prevent="$refs.barcodeInput.focus(); $refs.barcodeInput.select()">
+            {{-- Search / Barcode Input with Dropdown --}}
+            <div class="flex-1 max-w-xl relative" style="z-index: 100;"
+                @keydown.f2.window.prevent="$refs.barcodeInput.focus(); $refs.barcodeInput.select()"
+                @click.outside="showSuggestions = false"
+            >
                 <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <svg class="w-4 h-4 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -32,16 +35,68 @@
                     x-ref="barcodeInput"
                     x-model="searchQuery"
                     @keydown.enter.prevent="handleBarcodeScan()"
+                    @input.debounce.300ms="fetchSuggestions()"
+                    @keydown.escape="searchQuery = ''; showSuggestions = false; $refs.barcodeInput.focus()"
                     type="text"
-                    placeholder="Scan barcode or type product name + Enter (F2 to focus)"
+                    autocomplete="off"
+                    placeholder="Scan barcode or type product name (F2 to focus)"
                     autofocus
                     x-init="$el.focus()"
                     class="w-full pl-11 pr-24 py-2.5 bg-gray-100/70 dark:bg-slate-800/60 border border-gray-200/50 dark:border-slate-700/40 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all duration-200"
                     id="barcode-input"
                 >
                 <div class="absolute inset-y-0 right-0 pr-3 flex items-center gap-1.5">
+                    <template x-if="searchQuery.length > 0">
+                        <button @click="searchQuery = ''; showSuggestions = false; suggestions = []; $refs.barcodeInput.focus()"
+                            class="text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-white transition-colors mr-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </template>
                     <kbd class="hidden sm:inline-flex px-1.5 py-0.5 text-[9px] font-mono font-bold bg-gray-200/80 dark:bg-slate-700/60 text-gray-500 dark:text-slate-400 rounded border border-gray-300/40 dark:border-slate-600/40">F2</kbd>
                     <kbd class="hidden sm:inline-flex px-1.5 py-0.5 text-[9px] font-mono font-bold bg-gray-200/80 dark:bg-slate-700/60 text-gray-500 dark:text-slate-400 rounded border border-gray-300/40 dark:border-slate-600/40">Enter</kbd>
+                </div>
+
+                {{-- Search Suggestions Dropdown --}}
+                <div
+                    x-show="showSuggestions && suggestions.length > 0"
+                    x-transition:enter="transition ease-out duration-150"
+                    x-transition:enter-start="opacity-0 -translate-y-1"
+                    x-transition:enter-end="opacity-100 translate-y-0"
+                    x-transition:leave="transition ease-in duration-100"
+                    x-transition:leave-start="opacity-100"
+                    x-transition:leave-end="opacity-0 -translate-y-1"
+                    style="position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 9999; max-height: 320px; overflow-y: auto; background: white; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);"
+                    class="dark:!bg-slate-800 dark:!border-slate-700"
+                >
+                    <template x-for="item in suggestions" :key="item.id">
+                        <div
+                            @click="addItem(item); searchQuery = ''; showSuggestions = false; suggestions = []; $refs.barcodeInput.focus(); showToast(item.name + ' added', 'success');"
+                            style="padding: 10px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; transition: background-color 0.15s;"
+                            class="hover:!bg-emerald-50 dark:hover:!bg-slate-700"
+                            onmouseover="this.style.backgroundColor='#ecfdf5'" onmouseout="this.style.backgroundColor='transparent'"
+                        >
+                            <div style="display: flex; flex-direction: column;">
+                                <span x-text="item.name" style="font-size: 13px; font-weight: 600; color: #111827;" class="dark:!text-white"></span>
+                                <span x-text="item.barcode" style="font-size: 11px; color: #9ca3af; font-family: monospace;" class="dark:!text-slate-400"></span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span
+                                    x-text="item.stock > 0 ? item.stock + ' in stock' : 'Out of stock'"
+                                    :style="item.stock > 5 ? 'color: #059669; background: #ecfdf5; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500;' : (item.stock > 0 ? 'color: #d97706; background: #fffbeb; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500;' : 'color: #dc2626; background: #fef2f2; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500;')"
+                                ></span>
+                                <span x-text="'LKR ' + parseFloat(item.price).toFixed(2)" style="font-size: 13px; font-weight: 700; color: #059669; font-family: monospace;" class="dark:!text-emerald-400"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                {{-- No results message --}}
+                <div
+                    x-show="showSuggestions && suggestions.length === 0 && searchQuery.trim().length > 0 && !searchLoading"
+                    style="position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 9999; background: white; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); padding: 12px 16px; text-align: center; font-size: 13px; color: #9ca3af;"
+                    class="dark:!bg-slate-800 dark:!border-slate-700 dark:!text-slate-400"
+                >
+                    No products found matching "<span x-text="searchQuery"></span>"
                 </div>
             </div>
 
@@ -379,21 +434,11 @@ function cashierApp() {
         heldOrders: [],
         toast: { show: false, message: '', type: 'success' },
 
-        // Dummy product database (simulates barcode lookup)
-        productDB: [
-            { id: 1, barcode: '5449000000996', name: 'Coca-Cola 500ml', price: 350, weight: '500ml', category: 'Beverages' },
-            { id: 2, barcode: '5449000001498', name: 'Sprite 500ml', price: 350, weight: '500ml', category: 'Beverages' },
-            { id: 3, barcode: '8901234567890', name: 'Elephant House Ginger Beer', price: 180, weight: '330ml', category: 'Beverages' },
-            { id: 4, barcode: '4800016123456', name: 'Munchee Lemon Puff', price: 220, weight: '200g', category: 'Snacks' },
-            { id: 5, barcode: '4800016234567', name: 'Maliban Gold Marie', price: 190, weight: '300g', category: 'Snacks' },
-            { id: 6, barcode: '4800016345678', name: 'CBL Tikiri Mari', price: 150, weight: '250g', category: 'Snacks' },
-            { id: 7, barcode: '9415007001234', name: 'Anchor Fresh Milk 1L', price: 620, weight: '1L', category: 'Dairy' },
-            { id: 8, barcode: '9415007002345', name: 'Highland Curd 400g', price: 280, weight: '400g', category: 'Dairy' },
-            { id: 9, barcode: '9415007003456', name: 'Newdale Yoghurt Strawberry', price: 150, weight: '80g', category: 'Dairy' },
-            { id: 10, barcode: '7501234567001', name: 'Sliced Bread White', price: 420, weight: '450g', category: 'Bakery' },
-            { id: 11, barcode: '7501234567002', name: 'Fish Bun', price: 120, weight: '100g', category: 'Bakery' },
-            { id: 12, barcode: '7501234567003', name: 'Chocolate Croissant', price: 280, weight: '85g', category: 'Bakery' },
-        ],
+        // Dropdown state
+        suggestions: [],
+        showSuggestions: false,
+        searchLoading: false,
+        searchTimer: null,
 
         get quickAmounts() {
             const gt = this.grandTotal;
@@ -411,21 +456,55 @@ function cashierApp() {
         get grandTotal() { return this.afterDiscount + this.vat; },
         get changeDue() { return (this.amountReceived || 0) - this.grandTotal; },
 
-        handleBarcodeScan() {
+        async fetchSuggestions() {
+            const q = this.searchQuery.trim();
+            if (q.length === 0) {
+                this.suggestions = [];
+                this.showSuggestions = false;
+                return;
+            }
+            this.searchLoading = true;
+            try {
+                const response = await fetch('/cashier/search-products?q=' + encodeURIComponent(q), {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                });
+                if (response.ok) {
+                    this.suggestions = await response.json();
+                    this.showSuggestions = true;
+                }
+            } catch (e) {
+                console.error('Search error:', e);
+                this.suggestions = [];
+            }
+            this.searchLoading = false;
+        },
+
+        async handleBarcodeScan() {
             const q = this.searchQuery.trim();
             if (!q) return;
 
-            // Search by barcode first, then by name
-            let product = this.productDB.find(p => p.barcode === q);
-            if (!product) {
-                product = this.productDB.find(p => p.name.toLowerCase().includes(q.toLowerCase()));
-            }
+            this.showSuggestions = false;
+            this.suggestions = [];
 
-            if (product) {
-                this.addItem(product);
-                this.showToast(product.name + ' added', 'success');
-            } else {
-                this.showToast('Product not found: "' + q + '"', 'error');
+            try {
+                // Search from database
+                const response = await fetch('/cashier/search-products?q=' + encodeURIComponent(q), {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                if (response.ok) {
+                    const results = await response.json();
+                    if (results.length > 0) {
+                        this.addItem(results[0]);
+                        this.showToast(results[0].name + ' added', 'success');
+                    } else {
+                        this.showToast('Product not found: "' + q + '"', 'error');
+                    }
+                }
+            } catch (e) {
+                this.showToast('Search failed. Please try again.', 'error');
             }
 
             this.searchQuery = '';
@@ -507,16 +586,54 @@ function cashierApp() {
             this.$refs.barcodeInput.focus();
         },
 
-        placeOrder() {
+        async placeOrder() {
             if (this.saleItems.length === 0) return;
-            const total = this.grandTotal;
-            this.showToast('Sale completed! Total: LKR ' + total.toFixed(2), 'success');
-            this.saleItems = [];
-            this.discountValue = 0;
-            this.amountReceived = 0;
-            this.orderNote = '';
-            this.receiptNo = 'INV-' + String(Math.floor(1000 + Math.random() * 9000));
-            this.$refs.barcodeInput.focus();
+
+            const orderData = {
+                receipt_no: this.receiptNo,
+                items: this.saleItems.map(item => ({
+                    id: item.id,
+                    qty: item.qty,
+                    price: item.price,
+                })),
+                subtotal: this.subtotal,
+                discount: this.discountAmount,
+                tax: this.vat,
+                grand_total: this.grandTotal,
+                payment_method: this.paymentMethod,
+                note: this.orderNote || null,
+            };
+
+            try {
+                const response = await fetch('/cashier/place-order', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify(orderData),
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    this.showToast('Sale completed! Total: LKR ' + this.grandTotal.toFixed(2) + ' (Order #' + result.order_id + ')', 'success');
+                    this.saleItems = [];
+                    this.discountValue = 0;
+                    this.amountReceived = 0;
+                    this.orderNote = '';
+                    this.receiptNo = 'INV-' + String(Math.floor(1000 + Math.random() * 9000));
+                    this.$refs.barcodeInput.focus();
+                } else {
+                    const errors = result.errors ? Object.values(result.errors).flat().join(', ') : (result.message || 'Unknown error');
+                    this.showToast('Order failed: ' + errors, 'error');
+                }
+            } catch (e) {
+                console.error('Place order error:', e);
+                this.showToast('Network error. Please try again.', 'error');
+            }
         },
 
         showToast(message, type = 'success') {
