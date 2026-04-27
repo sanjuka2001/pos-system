@@ -1,7 +1,7 @@
 <div class="flex flex-col h-screen overflow-hidden">
 
     {{-- ═══════════════════════ TOP BAR ═══════════════════════ --}}
-    <header class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-gray-200/60 dark:border-slate-800/60 px-6 py-4 flex-shrink-0 transition-colors duration-300">
+    <header class="relative z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-gray-200/60 dark:border-slate-800/60 px-6 py-4 flex-shrink-0 transition-colors duration-300">
         <div class="flex items-center justify-between gap-6">
             {{-- Logo / Title --}}
             <div class="flex items-center gap-3 flex-shrink-0">
@@ -12,36 +12,122 @@
                 </div>
                 <div>
                     <h1 class="text-lg font-bold text-gray-900 dark:text-white tracking-tight">POS Terminal</h1>
-                    <p class="text-xs text-gray-500 dark:text-slate-400 font-medium">Cashier Mode</p>
+                    <p class="text-xs text-gray-500 dark:text-slate-400 font-medium">{{ ucfirst(Auth::user()->role) }}: <span class="text-emerald-600 dark:text-emerald-400">{{ Auth::user()->name }}</span></p>
                 </div>
             </div>
 
-            {{-- Search / Barcode Input --}}
-            <div class="flex-1 max-w-2xl relative">
+            {{-- Search / Barcode Input (Alpine.js powered dropdown) --}}
+            <div class="flex-1 max-w-2xl relative z-50"
+                x-data="{
+                    open: false,
+                    items: [],
+                    loading: false,
+                    searchTimer: null,
+                    async fetchSuggestions() {
+                        let term = $wire.search ? $wire.search.trim() : '';
+                        if (term.length === 0) {
+                            this.items = [];
+                            this.open = false;
+                            return;
+                        }
+                        this.loading = true;
+                        try {
+                            this.items = await $wire.getSuggestions(term);
+                            this.open = true;
+                        } catch(e) {
+                            this.items = [];
+                            this.open = false;
+                        }
+                        this.loading = false;
+                    },
+                    debouncedFetch() {
+                        clearTimeout(this.searchTimer);
+                        this.searchTimer = setTimeout(() => this.fetchSuggestions(), 250);
+                    },
+                    selectItem(id) {
+                        $wire.addFromSuggestion(id);
+                        this.items = [];
+                        this.open = false;
+                    },
+                    close() {
+                        this.items = [];
+                        this.open = false;
+                    }
+                }"
+                x-on:barcode-scanned.window="close()"
+                @click.outside="close()"
+            >
                 <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <svg class="w-5 h-5 text-gray-400 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                     </svg>
                 </div>
                 <input
-                    wire:model.live.debounce.300ms="search"
+                    wire:model.live="search"
                     wire:keydown.enter.prevent="scanBarcode"
                     type="text"
                     id="barcode-input"
                     placeholder="Scan barcode or type product name + Enter"
                     autofocus
+                    autocomplete="off"
                     x-init="$el.focus()"
                     x-on:barcode-scanned.window="$nextTick(() => { $el.value = ''; $el.focus() })"
-                    @keydown.escape="$wire.set('search', ''); $el.focus()"
+                    x-on:input.debounce.250ms="debouncedFetch()"
+                    @keydown.escape="$wire.set('search', ''); close(); $el.focus()"
                     class="w-full pl-12 pr-4 py-3 bg-gray-100/70 dark:bg-slate-800/70 border border-gray-200/60 dark:border-slate-700/50 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/40 transition-all duration-200"
                 >
                 @if($search)
-                    <button wire:click="$set('search', '')" class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 dark:text-slate-400 hover:text-gray-700 dark:hover:text-white transition-colors">
+                    <button wire:click="$set('search', '')" x-on:click="close()" class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 dark:text-slate-400 hover:text-gray-700 dark:hover:text-white transition-colors">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
                     </button>
                 @endif
+
+                {{-- Alpine.js Dropdown Suggestion List --}}
+                <div
+                    x-show="open && items.length > 0"
+                    x-transition:enter="transition ease-out duration-150"
+                    x-transition:enter-start="opacity-0 -translate-y-1"
+                    x-transition:enter-end="opacity-100 translate-y-0"
+                    x-transition:leave="transition ease-in duration-100"
+                    x-transition:leave-start="opacity-100 translate-y-0"
+                    x-transition:leave-end="opacity-0 -translate-y-1"
+                    x-cloak
+                    style="position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 9999; max-height: 320px; overflow-y: auto; background: white; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);"
+                    class="dark:!bg-slate-800 dark:!border-slate-700"
+                >
+                    <template x-for="item in items" :key="item.id">
+                        <div
+                            x-on:click="selectItem(item.id)"
+                            style="padding: 12px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; transition: background-color 0.15s;"
+                            class="hover:!bg-emerald-50 dark:hover:!bg-slate-700 dark:!border-slate-700/50"
+                            onmouseover="this.style.backgroundColor='#ecfdf5'" onmouseout="this.style.backgroundColor='transparent'"
+                        >
+                            <div style="display: flex; flex-direction: column;">
+                                <span x-text="item.name" style="font-size: 14px; font-weight: 600; color: #111827;" class="dark:!text-white"></span>
+                                <span x-text="item.barcode" style="font-size: 12px; color: #9ca3af; font-family: monospace;" class="dark:!text-slate-400"></span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <span
+                                    x-text="item.stock > 0 ? item.stock + ' in stock' : 'Out of stock'"
+                                    :style="item.stock > 5 ? 'color: #059669; background: #ecfdf5; padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 500;' : (item.stock > 0 ? 'color: #d97706; background: #fffbeb; padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 500;' : 'color: #dc2626; background: #fef2f2; padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 500;')"
+                                ></span>
+                                <span x-text="'LKR ' + parseFloat(item.price).toFixed(2)" style="font-size: 14px; font-weight: 700; color: #059669; font-family: monospace;" class="dark:!text-emerald-400"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                {{-- No results message --}}
+                <div
+                    x-show="open && items.length === 0 && !loading"
+                    x-cloak
+                    style="position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 9999; background: white; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); padding: 12px 16px; text-align: center; font-size: 14px; color: #9ca3af;"
+                    class="dark:!bg-slate-800 dark:!border-slate-700 dark:!text-slate-400"
+                >
+                    No products found matching "<span x-text="$wire.search"></span>"
+                </div>
             </div>
 
             {{-- Right Controls --}}

@@ -13,6 +13,7 @@ class CashierTerminal extends Component
     public ?int $categoryFilter = null;
     public array $cart = [];
     public string $amountReceived = '';
+    public array $suggestions = [];
 
     /**
      * Handle barcode scan submission (triggered on Enter key).
@@ -31,19 +32,57 @@ class CashierTerminal extends Component
         if ($product) {
             $this->addToCart($product->id);
             $this->search = '';
+            $this->suggestions = [];
             $this->dispatch('barcode-scanned');
         } else {
             // No exact match — try a name search and add first result
             $product = Product::where('name', 'like', '%' . trim($this->search) . '%')
-                ->where('stock', '>', 0)
                 ->first();
 
             if ($product) {
                 $this->addToCart($product->id);
                 $this->search = '';
+                $this->suggestions = [];
                 $this->dispatch('barcode-scanned');
             }
         }
+    }
+
+    /**
+     * Called from Alpine.js via $wire.getSuggestions(term).
+     * Returns matching products from inventory for the dropdown.
+     */
+    public function getSuggestions(string $term): array
+    {
+        $term = trim($term);
+
+        if (strlen($term) === 0) {
+            return [];
+        }
+
+        return Product::where(function ($q) use ($term) {
+                $q->where('name', 'like', '%' . $term . '%')
+                  ->orWhere('barcode', 'like', '%' . $term . '%');
+            })
+            ->orderBy('name')
+            ->take(8)
+            ->get()
+            ->map(fn ($p) => [
+                'id'      => $p->id,
+                'name'    => $p->name,
+                'barcode' => $p->barcode,
+                'price'   => (float) $p->price,
+                'stock'   => $p->stock,
+            ])
+            ->toArray();
+    }
+
+    public function addFromSuggestion(int $productId): void
+    {
+        $this->addToCart($productId);
+        $this->search = '';
+        $this->suggestions = [];
+        $this->dispatch('barcode-scanned');
     }
 
     /**
@@ -190,6 +229,8 @@ class CashierTerminal extends Component
 
         return $query->orderBy('name')->get();
     }
+
+    // searchSuggestions is now handled via updatedSearch() and the $suggestions public property
 
     /**
      * Get all categories.

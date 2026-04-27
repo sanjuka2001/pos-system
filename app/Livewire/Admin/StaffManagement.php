@@ -13,10 +13,30 @@ class StaffManagement extends Component
     public $name, $employee_id, $role, $plain_password, $branch_id;
     public $isManager = false;
 
+    public $editingPasswordId = null;
+    public $newPassword = '';
+
     public function mount()
     {
         $this->isManager = auth()->user()->role === 'manager';
+        $this->generateEmployeeId();
         $this->loadData();
+    }
+
+    public function generateEmployeeId()
+    {
+        $lastUser = User::orderBy('id', 'desc')->first();
+        $nextId = $lastUser ? $lastUser->id + 1 : 1;
+        
+        do {
+            $empId = 'EMP-' . str_pad($nextId, 4, '0', STR_PAD_LEFT);
+            $exists = User::where('employee_id', $empId)->exists();
+            if ($exists) {
+                $nextId++;
+            }
+        } while ($exists);
+        
+        $this->employee_id = $empId;
     }
 
     public function loadData()
@@ -49,9 +69,48 @@ class StaffManagement extends Component
             'branch_id' => $this->branch_id ?: null,
         ]);
 
-        $this->reset(['name', 'employee_id', 'role', 'plain_password', 'branch_id']);
+        $this->reset(['name', 'role', 'plain_password', 'branch_id']);
+        $this->generateEmployeeId();
         $this->loadData();
         session()->flash('message', 'Staff member created successfully.');
+    }
+
+    public function openEditPassword($id)
+    {
+        $this->editingPasswordId = $id;
+        $this->newPassword = '';
+    }
+
+    public function closeEditPassword()
+    {
+        $this->editingPasswordId = null;
+        $this->newPassword = '';
+    }
+
+    public function updatePassword()
+    {
+        $this->validate(['newPassword' => 'required|string|min:6']);
+        $user = User::find($this->editingPasswordId);
+        if ($user) {
+            $user->password = Hash::make($this->newPassword);
+            $user->plain_password = $this->newPassword;
+            $user->save();
+            session()->flash('message', 'Password updated successfully.');
+        }
+        $this->closeEditPassword();
+        $this->loadData();
+    }
+
+    public function deleteStaff($id)
+    {
+        $user = User::find($id);
+        if ($user && $user->id !== auth()->id() && $user->role !== 'admin') {
+            $user->delete();
+            session()->flash('message', 'Employee removed successfully.');
+        } else {
+            session()->flash('error', 'Cannot remove this user.');
+        }
+        $this->loadData();
     }
 
     public function render()
