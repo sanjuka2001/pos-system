@@ -10,14 +10,16 @@ class Order extends Model
 {
     protected $fillable = [
         'user_id', 'receipt_no', 'subtotal', 'discount',
+        'discount_type', 'discount_value', 'discount_reason',
         'tax', 'grand_total', 'payment_method', 'note', 'status',
     ];
 
     protected $casts = [
-        'subtotal'    => 'decimal:2',
-        'discount'    => 'decimal:2',
-        'tax'         => 'decimal:2',
-        'grand_total' => 'decimal:2',
+        'subtotal'       => 'decimal:2',
+        'discount'       => 'decimal:2',
+        'discount_value' => 'decimal:2',
+        'tax'            => 'decimal:2',
+        'grand_total'    => 'decimal:2',
     ];
 
     /**

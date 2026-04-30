@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\Setting;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 
@@ -14,6 +15,18 @@ class CashierTerminal extends Component
     public array $cart = [];
     public string $amountReceived = '';
     public array $suggestions = [];
+    public string $taxName = 'VAT';
+    public float $taxRate = 0;
+    public bool $taxEnabled = true;
+    public bool $pricesIncludeTax = false;
+
+    public function mount(): void
+    {
+        $this->taxEnabled = Setting::get('tax_enabled', 'true') === 'true';
+        $this->taxName = Setting::get('tax_name', 'VAT') ?: 'VAT';
+        $this->taxRate = (float) Setting::get('tax_rate', '0');
+        $this->pricesIncludeTax = Setting::get('prices_include_tax', 'false') === 'true';
+    }
 
     /**
      * Handle barcode scan submission (triggered on Enter key).
@@ -181,20 +194,43 @@ class CashierTerminal extends Component
     }
 
     /**
-     * Tax amount (15% VAT).
+     * Tax amount — dynamic rate from settings.
+     *
+     * If tax disabled: 0
+     * If prices include tax: extract tax from subtotal
+     * If prices exclude tax: add tax on top of subtotal
      */
     #[Computed]
     public function tax(): float
     {
-        return $this->subtotal * 0.15;
+        if (!$this->taxEnabled || $this->taxRate <= 0) {
+            return 0;
+        }
+
+        $subtotal = $this->subtotal;
+
+        if ($this->pricesIncludeTax) {
+            // Tax is already embedded in the price — extract it
+            return $subtotal * ($this->taxRate / (100 + $this->taxRate));
+        }
+
+        // Tax added on top
+        return $subtotal * ($this->taxRate / 100);
     }
 
     /**
-     * Grand total (subtotal + tax).
+     * Grand total.
+     *
+     * If prices include tax: grand total = subtotal (tax already inside)
+     * If prices exclude tax: grand total = subtotal + tax
      */
     #[Computed]
     public function grandTotal(): float
     {
+        if ($this->pricesIncludeTax) {
+            return $this->subtotal;
+        }
+
         return $this->subtotal + $this->tax;
     }
 
