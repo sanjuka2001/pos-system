@@ -3,6 +3,17 @@
 @section('title', 'Cashier')
 
 @section('content')
+@php
+    $taxEnabled = \App\Models\Setting::get('tax_enabled', 'true') === 'true';
+    $taxName = \App\Models\Setting::get('tax_name', 'VAT') ?: 'VAT';
+    $taxRate = (float) \App\Models\Setting::get('tax_rate', '0');
+    $pricesIncludeTax = \App\Models\Setting::get('prices_include_tax', 'false') === 'true';
+    $discountEnabled = \App\Models\Setting::get('discount_enabled', 'true') === 'true';
+    $discountSettingType = \App\Models\Setting::get('discount_type', 'percentage');
+    $discountMaxPercentage = (float) \App\Models\Setting::get('discount_max_percentage', '10');
+    $discountMaxFixed = (float) \App\Models\Setting::get('discount_max_fixed', '500');
+    $discountRequireReason = \App\Models\Setting::get('discount_require_reason', 'false') === 'true';
+@endphp
 <div class="flex flex-col h-screen overflow-hidden" x-data="cashierApp()">
 
     {{-- ═══════════════════════ TOP BAR ═══════════════════════ --}}
@@ -314,22 +325,37 @@
                     </div>
 
                     {{-- Discount --}}
-                    <div class="flex items-center justify-between text-xs gap-2">
-                        <span class="text-gray-500 dark:text-slate-400 flex-shrink-0">Discount</span>
-                        <div class="flex items-center gap-1.5">
-                            <button @click="discountType = discountType === 'amount' ? 'percent' : 'amount'"
-                                    class="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 border border-gray-200/40 dark:border-slate-700/30 transition-colors"
-                                    x-text="discountType === 'amount' ? 'LKR' : '%'"></button>
-                            <input type="number" x-model.number="discountValue" min="0" step="0.01" placeholder="0"
-                                   class="w-16 px-2 py-1 bg-gray-50 dark:bg-slate-800/50 border border-gray-200/50 dark:border-slate-700/30 rounded-lg text-xs font-mono text-right text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-                            <span class="text-red-500 dark:text-red-400 font-mono font-semibold flex-shrink-0 text-xs" x-text="'- ' + discountAmount.toFixed(2)"></span>
+                    @if($discountEnabled)
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between text-xs gap-2">
+                            <span class="text-gray-500 dark:text-slate-400 flex-shrink-0">Discount {{ $discountSettingType === 'percentage' ? '(%)' : '(LKR)' }}</span>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" x-model.number="discountValue" @input="validateDiscount()" min="0" step="0.01" placeholder="0"
+                                       class="w-20 px-2 py-1 bg-gray-50 dark:bg-slate-800/50 border rounded-lg text-xs font-mono text-right text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                       :class="discountError ? 'border-red-400 dark:border-red-500/50' : 'border-gray-200/50 dark:border-slate-700/30'">
+                                <span class="text-red-500 dark:text-red-400 font-mono font-semibold flex-shrink-0 text-xs" x-text="'- ' + discountAmount.toFixed(2)"></span>
+                            </div>
                         </div>
+                        <p class="text-[10px] text-gray-400 dark:text-slate-500 text-right">Max allowed: {{ $discountSettingType === 'percentage' ? $discountMaxPercentage . '%' : 'LKR ' . number_format($discountMaxFixed, 2) }}</p>
+                        <p x-show="discountError" x-text="discountError" class="text-[10px] text-red-500 dark:text-red-400 font-medium text-right" x-transition></p>
+                        @if($discountRequireReason)
+                        <input type="text" x-model="discountReason" placeholder="Reason for discount..." x-show="discountValue > 0"
+                               class="w-full px-2.5 py-1.5 bg-gray-50 dark:bg-slate-800/50 border border-gray-200/50 dark:border-slate-700/30 rounded-lg text-[11px] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500/30" x-transition>
+                        @endif
                     </div>
+                    @endif
 
+                    @if($taxEnabled)
                     <div class="flex items-center justify-between text-xs">
-                        <span class="text-gray-500 dark:text-slate-400">VAT (10%)</span>
+                        <span class="text-gray-500 dark:text-slate-400">{{ $taxName }} ({{ $taxRate }}%)</span>
                         <span class="text-gray-900 dark:text-white font-mono font-semibold" x-text="'LKR ' + vat.toFixed(2)"></span>
                     </div>
+                    @else
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-gray-500 dark:text-slate-400">Tax</span>
+                        <span class="text-gray-400 dark:text-slate-500 font-mono font-semibold">LKR 0.00</span>
+                    </div>
+                    @endif
 
                     <div class="h-px bg-gray-200/60 dark:bg-slate-700/50 my-1"></div>
 
@@ -426,7 +452,6 @@ function cashierApp() {
         receiptNo: 'INV-' + String(Math.floor(1000 + Math.random() * 9000)),
         saleItems: [],
         justAdded: false,
-        discountType: 'amount',
         discountValue: 0,
         amountReceived: 0,
         paymentMethod: 'cash',
@@ -445,15 +470,39 @@ function cashierApp() {
             return [500, 1000, 2000, 5000].filter(a => a >= gt * 0.5);
         },
 
+        taxEnabled: {{ $taxEnabled ? 'true' : 'false' }},
+        taxRate: {{ $taxRate }},
+        pricesIncludeTax: {{ $pricesIncludeTax ? 'true' : 'false' }},
+
+        // Discount settings from admin
+        discountEnabled: {{ $discountEnabled ? 'true' : 'false' }},
+        discountSettingType: '{{ $discountSettingType }}',
+        discountMaxPercentage: {{ $discountMaxPercentage }},
+        discountMaxFixed: {{ $discountMaxFixed }},
+        discountRequireReason: {{ $discountRequireReason ? 'true' : 'false' }},
+        discountError: null,
+        discountReason: '',
+
         get totalQty() { return this.saleItems.reduce((sum, i) => sum + i.qty, 0); },
         get subtotal() { return this.saleItems.reduce((sum, i) => sum + i.price * i.qty, 0); },
         get discountAmount() {
-            if (this.discountType === 'percent') return this.subtotal * (this.discountValue || 0) / 100;
+            if (!this.discountEnabled) return 0;
+            if (this.discountError) return 0;
+            if (this.discountSettingType === 'percentage') return this.subtotal * (this.discountValue || 0) / 100;
             return this.discountValue || 0;
         },
         get afterDiscount() { return Math.max(0, this.subtotal - this.discountAmount); },
-        get vat() { return this.afterDiscount * 0.10; },
-        get grandTotal() { return this.afterDiscount + this.vat; },
+        get vat() {
+            if (!this.taxEnabled || this.taxRate <= 0) return 0;
+            if (this.pricesIncludeTax) {
+                return this.afterDiscount * (this.taxRate / (100 + this.taxRate));
+            }
+            return this.afterDiscount * (this.taxRate / 100);
+        },
+        get grandTotal() {
+            if (this.pricesIncludeTax) return this.afterDiscount;
+            return this.afterDiscount + this.vat;
+        },
         get changeDue() { return (this.amountReceived || 0) - this.grandTotal; },
 
         async fetchSuggestions() {
@@ -549,22 +598,46 @@ function cashierApp() {
         clearSale() {
             this.saleItems = [];
             this.discountValue = 0;
+            this.discountReason = '';
+            this.discountError = null;
             this.amountReceived = 0;
             this.orderNote = '';
             this.showToast('Sale cleared', 'warning');
+        },
+
+        validateDiscount() {
+            if (!this.discountEnabled || !this.discountValue || this.discountValue <= 0) {
+                this.discountError = null;
+                return true;
+            }
+            if (this.discountSettingType === 'percentage') {
+                if (this.discountValue > this.discountMaxPercentage) {
+                    this.discountError = 'Maximum discount allowed is ' + this.discountMaxPercentage + '%';
+                    return false;
+                }
+            } else {
+                if (this.discountValue > this.discountMaxFixed) {
+                    this.discountError = 'Maximum discount allowed is LKR ' + this.discountMaxFixed.toFixed(2);
+                    return false;
+                }
+            }
+            this.discountError = null;
+            return true;
         },
 
         holdOrder() {
             if (this.saleItems.length === 0) return;
             this.heldOrders.push({
                 items: [...this.saleItems],
-                discount: { type: this.discountType, value: this.discountValue },
+                discount: { value: this.discountValue, reason: this.discountReason },
                 note: this.orderNote,
                 time: new Date().toLocaleTimeString('en-US', { hour12: true }),
                 receiptNo: this.receiptNo,
             });
             this.saleItems = [];
             this.discountValue = 0;
+            this.discountReason = '';
+            this.discountError = null;
             this.orderNote = '';
             this.receiptNo = 'INV-' + String(Math.floor(1000 + Math.random() * 9000));
             this.showToast('Order held (' + this.heldOrders.length + ' pending)', 'warning');
@@ -578,8 +651,9 @@ function cashierApp() {
             }
             const recalled = this.heldOrders.pop();
             this.saleItems = recalled.items;
-            this.discountType = recalled.discount.type;
             this.discountValue = recalled.discount.value;
+            this.discountReason = recalled.discount.reason || '';
+            this.discountError = null;
             this.orderNote = recalled.note;
             this.receiptNo = recalled.receiptNo;
             this.showToast('Order recalled: ' + recalled.receiptNo, 'success');
@@ -588,6 +662,17 @@ function cashierApp() {
 
         async placeOrder() {
             if (this.saleItems.length === 0) return;
+
+            // Validate discount before placing order
+            if (this.discountValue > 0 && !this.validateDiscount()) {
+                this.showToast(this.discountError, 'error');
+                return;
+            }
+            if (this.discountRequireReason && this.discountValue > 0 && !this.discountReason.trim()) {
+                this.discountError = 'Please enter a reason for the discount';
+                this.showToast(this.discountError, 'error');
+                return;
+            }
 
             const orderData = {
                 receipt_no: this.receiptNo,
@@ -598,6 +683,9 @@ function cashierApp() {
                 })),
                 subtotal: this.subtotal,
                 discount: this.discountAmount,
+                discount_type: this.discountSettingType,
+                discount_value: this.discountValue || 0,
+                discount_reason: this.discountReason || null,
                 tax: this.vat,
                 grand_total: this.grandTotal,
                 payment_method: this.paymentMethod,

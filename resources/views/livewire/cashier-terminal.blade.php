@@ -355,10 +355,17 @@
                             <span class="text-gray-500 dark:text-slate-400">Subtotal</span>
                             <span class="text-gray-900 dark:text-white font-mono font-semibold">LKR {{ number_format($this->subtotal, 2) }}</span>
                         </div>
+                        @if($taxEnabled)
                         <div class="flex items-center justify-between text-sm">
-                            <span class="text-gray-500 dark:text-slate-400">VAT (15%)</span>
+                            <span class="text-gray-500 dark:text-slate-400">{{ $taxName }} ({{ $taxRate }}%)</span>
                             <span class="text-gray-900 dark:text-white font-mono font-semibold">LKR {{ number_format($this->tax, 2) }}</span>
                         </div>
+                        @else
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-500 dark:text-slate-400">Tax</span>
+                            <span class="text-gray-400 dark:text-slate-500 font-mono font-semibold">LKR 0.00</span>
+                        </div>
+                        @endif
                         <div class="h-px bg-gray-200/60 dark:bg-slate-700/50 my-2"></div>
                         <div class="flex items-center justify-between">
                             <span class="text-base font-bold text-gray-900 dark:text-white">Grand Total</span>
