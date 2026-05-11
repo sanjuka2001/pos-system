@@ -95,9 +95,6 @@ services:
         value: "${DB_PASSWORD}"
         # Set your Aiven password in the DO dashboard
 
-      - key: MYSQL_ATTR_SSL_CA
-        value: "/app/storage/certs/ca.pem"
-
       # ---- Session & Cache ----
       - key: SESSION_DRIVER
         value: "file"
