@@ -1,49 +1,48 @@
 # =============================================================================
 # DigitalOcean App Platform - App Spec
 # POS System (Laravel 12 + Livewire + MySQL)
+# No Docker required — uses DigitalOcean buildpacks
 # =============================================================================
 #
 # DEPLOYMENT STEPS:
-# 1. Push this repo to GitHub/GitLab
+# 1. Push this repo to GitHub
 # 2. Go to DigitalOcean → App Platform → Create App
-# 3. Either:
-#    a) Connect your GitHub repo (auto-detects this file), OR
-#    b) Use CLI: doctl apps create --spec .do/app.yaml
-# 4. Add a MySQL database in the DigitalOcean dashboard
-# 5. Set the environment variables below
+# 3. Connect your GitHub repo (auto-detects this file)
+# 4. Set APP_KEY and APP_URL in the dashboard
+# 5. Deploy!
 #
 # =============================================================================
 
 name: pos-system
-region: sgp1  # Singapore (closest to Sri Lanka) — change if needed
+region: sgp1  # Singapore (closest to Sri Lanka)
                # Options: nyc1, sfo1, ams3, sgp1, lon1, fra1, blr1, tor1, syd1
 
 services:
   - name: pos-web
-    # ---- Source Configuration ----
+    # ---- Source ----
     github:
       repo: sanjuka2001/pos-system
       branch: main
       deploy_on_push: true
 
-    # ---- Docker Configuration ----
-    dockerfile_path: Dockerfile
+    # ---- Buildpack (auto-detects PHP) ----
+    build_command: |
+      npm install
+      npm run build
+      composer install --no-dev --optimize-autoloader
+      php artisan config:cache
+      php artisan route:cache
+      php artisan view:cache
+      php artisan migrate --force
 
-    # ---- Instance Configuration ----
+    run_command: heroku-php-apache2 public/
+
+    # ---- Instance ----
     instance_count: 1
-    instance_size_slug: basic-xxs  # $5/mo — upgrade as needed
+    instance_size_slug: basic-xxs  # $5/mo
     # Options: basic-xxs ($5), basic-xs ($10), basic-s ($18), basic-m ($36)
 
     http_port: 8080
-
-    # ---- Health Check ----
-    health_check:
-      http_path: /
-      initial_delay_seconds: 30
-      period_seconds: 15
-      timeout_seconds: 5
-      success_threshold: 1
-      failure_threshold: 3
 
     # ---- Environment Variables ----
     envs:
@@ -58,14 +57,12 @@ services:
 
       - key: APP_URL
         value: "${APP_URL}"
-        # Set this in the DO dashboard to your app's URL
-        # e.g., https://pos-system-xxxxx.ondigitalocean.app
+        # Set in DO dashboard → e.g. https://pos-system-xxxxx.ondigitalocean.app
 
       - key: APP_KEY
-        value: "${APP_KEY}"
         type: SECRET
-        # Generate with: php artisan key:generate --show
-        # Paste the base64:... value in the DO dashboard
+        value: "${APP_KEY}"
+        # Generate locally: php artisan key:generate --show
 
       - key: LOG_CHANNEL
         value: "stderr"
@@ -73,7 +70,7 @@ services:
       - key: LOG_LEVEL
         value: "warning"
 
-      # ---- Database (DigitalOcean Managed MySQL) ----
+      # ---- Database (auto-bound from managed MySQL below) ----
       - key: DB_CONNECTION
         value: "mysql"
 
@@ -103,16 +100,13 @@ services:
       - key: QUEUE_CONNECTION
         value: "sync"
 
-      - key: FILESYSTEM_DISK
-        value: "local"
-
       - key: BCRYPT_ROUNDS
         value: "12"
 
-# ---- Database Component ----
+# ---- Managed MySQL Database ----
 databases:
   - name: db
     engine: MYSQL
     version: "8"
-    size: db-s-1vcpu-1gb  # $15/mo — smallest managed MySQL
+    size: db-s-1vcpu-1gb  # $15/mo
     num_nodes: 1
