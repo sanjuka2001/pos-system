@@ -25,7 +25,11 @@ services:
       branch: main
       deploy_on_push: true
 
-    # ---- Buildpack (auto-detects PHP) ----
+    # ---- Buildpacks (Node for Vite + PHP) ----
+    buildpacks:
+      - name: node
+      - name: php
+
     build_command: |
       npm install
       npm run build
@@ -70,25 +74,29 @@ services:
       - key: LOG_LEVEL
         value: "warning"
 
-      # ---- Database (auto-bound from managed MySQL below) ----
+      # ---- Database (Aiven MySQL) ----
       - key: DB_CONNECTION
         value: "mysql"
 
       - key: DB_HOST
-        value: "${db.HOSTNAME}"
+        value: "nipun-pos-system-nipunsanjukathilakarathna-60ab.i.aivencloud.com"
 
       - key: DB_PORT
-        value: "${db.PORT}"
+        value: "13862"
 
       - key: DB_DATABASE
-        value: "${db.DATABASE}"
+        value: "defaultdb"
 
       - key: DB_USERNAME
-        value: "${db.USERNAME}"
+        value: "avnadmin"
 
       - key: DB_PASSWORD
-        value: "${db.PASSWORD}"
         type: SECRET
+        value: "${DB_PASSWORD}"
+        # Set your Aiven password in the DO dashboard
+
+      - key: MYSQL_ATTR_SSL_CA
+        value: "/app/storage/certs/ca.pem"
 
       # ---- Session & Cache ----
       - key: SESSION_DRIVER
@@ -103,10 +111,3 @@ services:
       - key: BCRYPT_ROUNDS
         value: "12"
 
-# ---- Managed MySQL Database ----
-databases:
-  - name: db
-    engine: MYSQL
-    version: "8"
-    size: db-s-1vcpu-1gb  # $15/mo
-    num_nodes: 1
